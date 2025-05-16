@@ -2,6 +2,9 @@
 
 A comprehensive coupon management and validation system for an online pharmacy platform. The system allows administrators to create and manage coupons while providing a robust API for validation and application of coupons to customer orders.
 
+![Swagger UI Documentation](img/image.png)
+
+
 ## Features
 
 - **Admin Coupon Management:** Create, update, delete, and list coupons
