@@ -1,0 +1,14 @@
+{
+  "server": {
+    "port": "8080"
+  },
+  "database": {
+    "driver": "sqlite",
+    "host": "",
+    "port": "",
+    "user": "",
+    "password": "",
+    "name": "coupon_system.db",
+    "sslmode": ""
+  }
+} 
