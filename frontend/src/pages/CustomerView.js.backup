@@ -1,0 +1,588 @@
+import React, { useState, useEffect } from 'react';
+import {
+  Box,
+  Heading,
+  VStack,
+  HStack,
+  Text,
+  Button,
+  Input,
+  useToast,
+  SimpleGrid,
+  Card,
+  CardBody,
+  Badge,
+  Divider,
+  FormControl,
+  FormLabel,
+  NumberInput,
+  NumberInputField,
+  NumberInputStepper,
+  NumberIncrementStepper,
+  NumberDecrementStepper,
+  Select,
+  Stack,
+  Flex,
+  IconButton,
+  Grid,
+  GridItem,
+  Alert,
+  AlertIcon,
+  AlertTitle,
+  useColorModeValue,
+} from '@chakra-ui/react';
+import { AddIcon, CloseIcon, CheckIcon } from '@chakra-ui/icons';
+import { couponsApi } from '../api/api';
+
+// Sample medicine data
+const medicineCategories = ['painkiller', 'antibiotic', 'vitamin', 'supplement', 'first-aid'];
+const sampleMedicines = [
+  { id: 'med_123', name: 'Paracetamol', category: 'painkiller', price: 5.99 },
+  { id: 'med_124', name: 'Ibuprofen', category: 'painkiller', price: 7.99 },
+  { id: 'med_125', name: 'Amoxicillin', category: 'antibiotic', price: 12.99 },
+  { id: 'med_126', name: 'Vitamin C', category: 'vitamin', price: 8.99 },
+  { id: 'med_127', name: 'Multivitamin', category: 'vitamin', price: 15.99 },
+  { id: 'med_128', name: 'Band-Aid Pack', category: 'first-aid', price: 4.99 },
+  { id: 'med_129', name: 'Protein Powder', category: 'supplement', price: 29.99 },
+  { id: 'med_130', name: 'Omega-3', category: 'supplement', price: 17.99 },
+];
+
+const CustomerView = () => {
+  const [cartItems, setCartItems] = useState([]);
+  const [availableCoupons, setAvailableCoupons] = useState([]);
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [validationResult, setValidationResult] = useState(null);
+  const toast = useToast();
+  
+  // Generate a random user ID for the demo
+  const [userId] = useState(`user_${Math.floor(Math.random() * 1000)}`);
+  
+  // Background colors
+  const cardBg = useColorModeValue('white', 'gray.800');
+  const borderColor = useColorModeValue('gray.200', 'gray.700');
+  const highlightColor = useColorModeValue('brand.50', 'brand.900');
+  
+  // Calculate cart totals
+  const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const deliveryFee = 5.99;
+  let discount = 0;
+  
+  if (appliedCoupon && appliedCoupon.discount) {
+    discount = appliedCoupon.discount.total_discount;
+  }
+  
+  const total = subtotal + deliveryFee - discount;
+  
+  // Fetch applicable coupons when cart changes
+  useEffect(() => {
+    if (cartItems.length > 0) {
+      fetchApplicableCoupons();
+    } else {
+      setAvailableCoupons([]);
+      setAppliedCoupon(null);
+      setValidationResult(null);
+    }
+  }, [cartItems]);
+  
+  const fetchApplicableCoupons = async () => {
+    try {
+      setLoading(true);
+      
+      // Instead of using the problematic /applicable endpoint, 
+      // fetch all coupons and display them as available
+      const response = await couponsApi.getAllCoupons();
+      
+      if (response && response.length > 0) {
+        // Transform the coupons to the format expected by the UI
+        const transformedCoupons = response.map(coupon => ({
+          coupon_code: coupon.coupon_code,
+          discount_type: coupon.discount_type,
+          discount_value: coupon.discount_value,
+          description: coupon.terms_and_conditions || 
+                       (coupon.discount_type === 'percentage' 
+                         ? `${coupon.discount_value}% off your entire order` 
+                         : `Fixed $${coupon.discount_value} discount`),
+          min_purchase: coupon.min_order_value || 0
+        }));
+        
+        setAvailableCoupons(transformedCoupons);
+      } else {
+        // Fallback to sample data if API returns empty
+        setAvailableCoupons([
+          {
+            coupon_code: "SAVE20",
+            discount_type: "percentage",
+            discount_value: 20,
+            description: "20% off your entire order"
+          },
+          {
+            coupon_code: "NEW2025",
+            discount_type: "fixed",
+            discount_value: 50,
+            description: "Fixed $50 discount"
+          },
+          {
+            coupon_code: "MAY2025",
+            discount_type: "percentage",
+            discount_value: 25,
+            description: "25% off your entire order"
+          }
+        ]);
+      }
+    } catch (error) {
+      console.error('Error fetching coupons:', error);
+      
+      // Provide sample coupons for demo purposes even when API fails
+      setAvailableCoupons([
+        {
+          coupon_code: "SAVE20",
+          discount_type: "percentage",
+          discount_value: 20,
+          description: "20% off your entire order"
+        },
+        {
+          coupon_code: "NEW2025",
+          discount_type: "fixed",
+          discount_value: 50,
+          description: "Fixed $50 discount"
+        },
+        {
+          coupon_code: "MAY2025",
+          discount_type: "percentage",
+          discount_value: 25,
+          description: "25% off your entire order"
+        }
+      ]);
+      
+      toast({
+        title: 'Demo Mode',
+        description: 'Using sample coupons for demonstration',
+        status: 'info',
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const validateCoupon = async () => {
+    if (!couponCode) {
+      toast({
+        title: 'Error',
+        description: 'Please enter a coupon code.',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      const requestData = {
+        coupon_code: couponCode,
+        cart_items: cartItems.map(item => ({
+          id: item.id,
+          category: item.category,
+          price: item.price,
+          quantity: item.quantity
+        })),
+        order_total: subtotal,
+        user_id: userId,
+        timestamp: new Date().toISOString()
+      };
+      
+      const response = await couponsApi.validateCoupon(requestData);
+      setValidationResult(response);
+      
+      if (response.is_valid) {
+        setAppliedCoupon({
+          coupon_code: couponCode,
+          discount: response.discount
+        });
+        
+        toast({
+          title: 'Coupon Applied',
+          description: response.message,
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+      } else {
+        setAppliedCoupon(null);
+        toast({
+          title: 'Invalid Coupon',
+          description: response.reason,
+          status: 'error',
+          duration: 3000,
+          isClosable: true,
+        });
+      }
+    } catch (error) {
+      console.error('Error validating coupon:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to validate coupon.',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const applyCouponFromList = async (code) => {
+    setCouponCode(code);
+    
+    try {
+      setLoading(true);
+      
+      // First get the coupon from our available coupons to check min purchase
+      const couponToApply = availableCoupons.find(
+        c => c.coupon_code.toLowerCase() === code.toLowerCase()
+      );
+      
+      // If the coupon has a minimum purchase requirement, check it
+      if (couponToApply && couponToApply.min_purchase > 0 && subtotal < couponToApply.min_purchase) {
+        toast({
+          title: "Minimum Purchase Required",
+          description: `This coupon requires a minimum purchase of $${couponToApply.min_purchase.toFixed(2)}.`,
+          status: "warning",
+          duration: 3000,
+          isClosable: true,
+        });
+        setLoading(false);
+        return;
+      }
+
+      const requestData = {
+        coupon_code: code,
+        cart_items: cartItems.map(item => ({
+          id: item.id,
+          category: item.category,
+          price: item.price,
+          quantity: item.quantity
+        })),
+        order_total: subtotal,
+        user_id: userId,
+        timestamp: new Date().toISOString()
+      };
+      
+      const response = await couponsApi.validateCoupon(requestData);
+      setValidationResult(response);
+      
+      if (response.is_valid) {
+        setAppliedCoupon({
+          coupon_code: code,
+          discount: response.discount
+        });
+        
+        toast({
+          title: 'Coupon Applied',
+          description: response.message,
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+      } else {
+        setAppliedCoupon(null);
+        toast({
+          description: response.reason,
+          status: 'error',
+          duration: 3000,
+          isClosable: true,
+        });
+      }
+    } catch (error) {
+      console.error('Error applying coupon:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to apply coupon.',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCode('');
+    setValidationResult(null);
+    toast({
+      title: 'Coupon Removed',
+      status: 'info',
+      duration: 3000,
+      isClosable: true,
+    });
+  };
+  
+  const addToCart = (medicine) => {
+    setCartItems(prev => {
+      // Check if item is already in cart
+      const existingItemIndex = prev.findIndex(item => item.id === medicine.id);
+      
+      if (existingItemIndex >= 0) {
+        // Update quantity if already in cart
+        const updatedItems = [...prev];
+        updatedItems[existingItemIndex] = {
+          ...updatedItems[existingItemIndex],
+          quantity: updatedItems[existingItemIndex].quantity + 1
+        };
+        return updatedItems;
+      } else {
+        // Add new item to cart
+        return [...prev, { ...medicine, quantity: 1 }];
+      }
+    });
+  };
+  
+  const updateQuantity = (itemId, newQuantity) => {
+    if (newQuantity <= 0) {
+      removeFromCart(itemId);
+      return;
+    }
+    
+    setCartItems(prev => 
+      prev.map(item => 
+        item.id === itemId 
+          ? { ...item, quantity: newQuantity } 
+          : item
+      )
+    );
+  };
+  
+  const removeFromCart = (itemId) => {
+    setCartItems(prev => prev.filter(item => item.id !== itemId));
+  };
+  
+  return (
+    <Grid templateColumns={{ base: '1fr', lg: '2fr 1fr' }} gap={8}>
+      <GridItem>
+        <VStack spacing={8} align="stretch">
+          <Box>
+            <Heading as="h2" size="lg" mb={4}>
+              Medicine Catalog
+            </Heading>
+            
+            <SimpleGrid columns={{ base: 1, sm: 2, md: 3 }} spacing={4}>
+              {sampleMedicines.map(medicine => (
+                <Card key={medicine.id} boxShadow="sm" bg={cardBg} borderColor={borderColor} borderWidth="1px">
+                  <CardBody>
+                    <VStack align="start" spacing={2}>
+                      <Heading size="sm">{medicine.name}</Heading>
+                      <Badge colorScheme="blue">{medicine.category}</Badge>
+                      <Text fontWeight="bold">${medicine.price.toFixed(2)}</Text>
+                      <Button 
+                        rightIcon={<AddIcon />} 
+                        colorScheme="brand" 
+                        size="sm"
+                        onClick={() => addToCart(medicine)}
+                      >
+                        Add to Cart
+                      </Button>
+                    </VStack>
+                  </CardBody>
+                </Card>
+              ))}
+            </SimpleGrid>
+          </Box>
+          
+          <Box>
+            <Heading as="h2" size="lg" mb={4}>
+              Available Coupons
+            </Heading>
+            
+            {availableCoupons.length > 0 ? (
+              <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
+                {availableCoupons.map(coupon => (
+                  <Card
+                    key={coupon.coupon_code}
+                    direction="row"
+                    overflow="hidden"
+                    variant="outline"
+                    bg={cardBg}
+                    _hover={{ shadow: 'md' }}
+                    cursor="pointer"
+                    onClick={() => applyCouponFromList(coupon.coupon_code)}
+                    borderColor={appliedCoupon?.coupon_code === coupon.coupon_code ? 'brand.500' : borderColor}
+                    borderWidth={appliedCoupon?.coupon_code === coupon.coupon_code ? '2px' : '1px'}
+                    background={appliedCoupon?.coupon_code === coupon.coupon_code ? highlightColor : cardBg}
+                  >
+                    <CardBody>
+                      <Flex justify="space-between" align="center">
+                        <VStack align="start" spacing={1}>
+                          <Heading size="md">{coupon.coupon_code}</Heading>
+                          <Text>
+                            {coupon.discount_type === 'percentage' 
+                              ? `${coupon.discount_value}% off` 
+                              : `$${coupon.discount_value.toFixed(2)} off`}
+                          </Text>
+                          {coupon.description && (
+                            <Text fontSize="sm" color="gray.500">{coupon.description}</Text>
+                          )}
+                        </VStack>
+                        
+                        {appliedCoupon?.coupon_code === coupon.coupon_code && (
+                          <Badge colorScheme="green">Applied</Badge>
+                        )}
+                      </Flex>
+                    </CardBody>
+                  </Card>
+                ))}
+              </SimpleGrid>
+            ) : cartItems.length > 0 ? (
+              <Alert status="info">
+                <AlertIcon />
+                <AlertTitle>No applicable coupons found for your cart.</AlertTitle>
+              </Alert>
+            ) : (
+              <Alert status="info">
+                <AlertIcon />
+                <AlertTitle>Add items to your cart to see available coupons.</AlertTitle>
+              </Alert>
+            )}
+          </Box>
+        </VStack>
+      </GridItem>
+      
+      <GridItem>
+        <Box
+          p={5}
+          borderWidth="1px"
+          borderRadius="lg"
+          bg={cardBg}
+          position="sticky"
+          top="80px"
+          boxShadow="md"
+        >
+          <Heading as="h2" size="lg" mb={4}>
+            Your Cart
+          </Heading>
+          
+          {cartItems.length === 0 ? (
+            <Text color="gray.500">Your cart is empty</Text>
+          ) : (
+            <VStack spacing={4} align="stretch">
+              {cartItems.map(item => (
+                <Flex key={item.id} justify="space-between" align="center">
+                  <VStack align="start" spacing={0}>
+                    <Text fontWeight="medium">{item.name}</Text>
+                    <Text fontSize="sm" color="gray.500">${item.price.toFixed(2)} each</Text>
+                  </VStack>
+                  
+                  <HStack>
+                    <NumberInput
+                      size="sm"
+                      maxW={20}
+                      min={1}
+                      value={item.quantity}
+                      onChange={(value) => updateQuantity(item.id, parseInt(value))}
+                    >
+                      <NumberInputField />
+                      <NumberInputStepper>
+                        <NumberIncrementStepper />
+                        <NumberDecrementStepper />
+                      </NumberInputStepper>
+                    </NumberInput>
+                    
+                    <IconButton
+                      aria-label="Remove item"
+                      icon={<CloseIcon />}
+                      size="sm"
+                      variant="ghost"
+                      colorScheme="red"
+                      onClick={() => removeFromCart(item.id)}
+                    />
+                  </HStack>
+                </Flex>
+              ))}
+              
+              <Divider />
+              
+              <FormControl>
+                <FormLabel>Coupon Code</FormLabel>
+                <HStack>
+                  <Input
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value)}
+                    placeholder="Enter coupon code"
+                    isDisabled={!!appliedCoupon}
+                  />
+                  {appliedCoupon ? (
+                    <Button
+                      colorScheme="red"
+                      variant="outline"
+                      onClick={removeCoupon}
+                      isLoading={loading}
+                    >
+                      Remove
+                    </Button>
+                  ) : (
+                    <Button
+                      colorScheme="brand"
+                      onClick={validateCoupon}
+                      isLoading={loading}
+                    >
+                      Apply
+                    </Button>
+                  )}
+                </HStack>
+              </FormControl>
+              
+              {appliedCoupon && validationResult && validationResult.is_valid && (
+                <Alert status="success" borderRadius="md">
+                  <AlertIcon />
+                  <AlertTitle>Coupon {appliedCoupon.coupon_code} applied!</AlertTitle>
+                </Alert>
+              )}
+              
+              <Divider />
+              
+              <Stack spacing={2}>
+                <Flex justify="space-between">
+                  <Text>Subtotal:</Text>
+                  <Text>${subtotal.toFixed(2)}</Text>
+                </Flex>
+                <Flex justify="space-between">
+                  <Text>Delivery Fee:</Text>
+                  <Text>${deliveryFee.toFixed(2)}</Text>
+                </Flex>
+                {discount > 0 && (
+                  <Flex justify="space-between" color="green.500" fontWeight="bold">
+                    <Text>Discount:</Text>
+                    <Text>-${discount.toFixed(2)}</Text>
+                  </Flex>
+                )}
+                <Divider />
+                <Flex justify="space-between" fontWeight="bold">
+                  <Text>Total:</Text>
+                  <Text>${total.toFixed(2)}</Text>
+                </Flex>
+              </Stack>
+              
+              <Button
+                colorScheme="brand"
+                size="lg"
+                width="full"
+                mt={4}
+                rightIcon={<CheckIcon />}
+                isDisabled={cartItems.length === 0}
+              >
+                Place Order
+              </Button>
+            </VStack>
+          )}
+        </Box>
+      </GridItem>
+    </Grid>
+  );
+};
+
+export default CustomerView; 

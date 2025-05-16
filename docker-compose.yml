@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        - GO_VERSION=1.23
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./backend/swagger:/app/swagger
+    depends_on:
+      - db
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=coupon_system
+      - DB_DRIVER=postgres
+      - DB_SSLMODE=disable
+    restart: unless-stopped
+    networks:
+      - farmako-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - farmako-network
+
+  db:
+    image: postgres:14-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=coupon_system
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - farmako-network
+
+volumes:
+  postgres_data:
+
+networks:
+  farmako-network:
+    driver: bridge 
